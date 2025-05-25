@@ -11,18 +11,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.widgetshare.data.models.User
+import com.example.widgetshare.data.remote.UserDto
+import com.example.widgetshare.data.remote.FriendRequestDto
 import com.example.widgetshare.data.repository.UserRepository
 import kotlinx.coroutines.launch
 
 @Composable
 fun FriendsScreen(navController: NavController) {
-    val userRepository = remember { UserRepository() }
+    val context = LocalContext.current
+    val userRepository = remember { UserRepository(context) }
     val scope = rememberCoroutineScope()
-    var friends by remember { mutableStateOf<List<User>>(emptyList()) }
-    var friendRequests by remember { mutableStateOf<List<User>>(emptyList()) }
+    var friends by remember { mutableStateOf<List<UserDto>>(emptyList()) }
+    var friendRequests by remember { mutableStateOf<List<FriendRequestDto>>(emptyList()) }
     var searchNickname by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
@@ -49,11 +52,9 @@ fun FriendsScreen(navController: NavController) {
         ) {
             Text("Friends", style = MaterialTheme.typography.headlineSmall)
             IconButton(onClick = {
-                scope.launch {
-                    userRepository.logout()
-                    navController.navigate("auth") {
-                        popUpTo(0)
-                    }
+                userRepository.logout()
+                navController.navigate("auth") {
+                    popUpTo(0)
                 }
             }) {
                 Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
@@ -81,13 +82,13 @@ fun FriendsScreen(navController: NavController) {
                             isRequestLoading = true
                             errorMessage = null
                             scope.launch {
-                                val result = userRepository.sendFriendRequest(searchNickname)
-                                if (result.isSuccess) {
+                                try {
+                                    userRepository.sendFriendRequest(searchNickname)
                                     errorMessage = "Request sent!"
                                     searchNickname = ""
                                     refresh()
-                                } else {
-                                    errorMessage = result.exceptionOrNull()?.localizedMessage
+                                } catch (e: Exception) {
+                                    errorMessage = e.localizedMessage
                                 }
                                 isRequestLoading = false
                             }
@@ -111,7 +112,7 @@ fun FriendsScreen(navController: NavController) {
             LazyColumn(
                 modifier = Modifier.heightIn(max = 180.dp)
             ) {
-                items(friendRequests) { user ->
+                items(friendRequests) { req ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -124,12 +125,12 @@ fun FriendsScreen(navController: NavController) {
                         ) {
                             Icon(Icons.Default.Group, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(user.nickname, style = MaterialTheme.typography.bodyLarge)
+                            Text("From: ${req.from_user_id}", style = MaterialTheme.typography.bodyLarge)
                             Spacer(modifier = Modifier.weight(1f))
                             Button(onClick = {
                                 isLoading = true
                                 scope.launch {
-                                    userRepository.acceptFriendRequest(user.id)
+                                    userRepository.acceptFriendRequest(req.id)
                                     refresh()
                                     isLoading = false
                                 }
@@ -140,7 +141,7 @@ fun FriendsScreen(navController: NavController) {
                             OutlinedButton(onClick = {
                                 isLoading = true
                                 scope.launch {
-                                    userRepository.rejectFriendRequest(user.id)
+                                    userRepository.declineFriendRequest(req.id)
                                     refresh()
                                     isLoading = false
                                 }

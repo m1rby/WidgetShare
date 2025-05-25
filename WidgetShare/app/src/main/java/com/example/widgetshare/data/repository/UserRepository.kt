@@ -1,73 +1,48 @@
+// This file will be rewritten for REST API. All Firebase code removed. 
+
 package com.example.widgetshare.data.repository
 
-import com.example.widgetshare.data.models.User
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
-import kotlinx.coroutines.tasks.await
+import android.content.Context
+import android.content.SharedPreferences
+import com.example.widgetshare.data.remote.ApiClient
+import com.example.widgetshare.data.remote.ApiService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-class UserRepository {
-    private val database = FirebaseDatabase.getInstance()
-    private val usersRef = database.getReference("users")
-    private val auth = FirebaseAuth.getInstance()
+class UserRepository(private val context: Context) {
+    private val api: ApiService = ApiClient.getApiService(context)
+    private val prefs: SharedPreferences = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
 
-    suspend fun getCurrentUser(): User? {
-        val userId = auth.currentUser?.uid ?: return null
-        return usersRef.child(userId).get().await().getValue(User::class.java)
-    }
-
-    suspend fun createUserProfile(userId: String, email: String, nickname: String) {
-        val user = User(id = userId, email = email, nickname = nickname)
-        usersRef.child(userId).setValue(user).await()
-    }
-
-    suspend fun findUserByNickname(nickname: String): User? {
-        val snapshot = usersRef.orderByChild("nickname").equalTo(nickname).get().await()
-        return snapshot.children.firstOrNull()?.getValue(User::class.java)
-    }
-
-    suspend fun sendFriendRequest(toNickname: String): Result<Unit> {
-        val currentUser = getCurrentUser() ?: return Result.failure(Exception("Not logged in"))
-        val targetUser = findUserByNickname(toNickname) ?: return Result.failure(Exception("User not found"))
-        if (targetUser.friendRequests.contains(currentUser.id)) {
-            return Result.failure(Exception("Request already sent"))
+    suspend fun register(email: String, nickname: String, password: String): Result<Unit> = withContext(Dispatchers.IO) {
+        return@withContext try {
+            api.register(email, nickname, password)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        val updatedRequests = targetUser.friendRequests + currentUser.id
-        usersRef.child(targetUser.id).child("friendRequests").setValue(updatedRequests).await()
-        return Result.success(Unit)
     }
 
-    suspend fun getFriendRequests(): List<User> {
-        val currentUser = getCurrentUser() ?: return emptyList()
-        return currentUser.friendRequests.mapNotNull { usersRef.child(it).get().await().getValue(User::class.java) }
+    suspend fun login(email: String, password: String): Result<Unit> = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val resp = api.login(email, password)
+            prefs.edit().putString("jwt", resp.access_token).apply()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
-    suspend fun acceptFriendRequest(fromUserId: String): Result<Unit> {
-        val currentUser = getCurrentUser() ?: return Result.failure(Exception("Not logged in"))
-        val fromUser = usersRef.child(fromUserId).get().await().getValue(User::class.java) ?: return Result.failure(Exception("User not found"))
-        // Add each other to friends
-        val updatedFriends = currentUser.friends + fromUserId
-        val updatedRequests = currentUser.friendRequests - fromUserId
-        usersRef.child(currentUser.id).child("friends").setValue(updatedFriends).await()
-        usersRef.child(currentUser.id).child("friendRequests").setValue(updatedRequests).await()
-        // Update other user
-        val fromUserFriends = fromUser.friends + currentUser.id
-        usersRef.child(fromUserId).child("friends").setValue(fromUserFriends).await()
-        return Result.success(Unit)
+    fun logout() {
+        prefs.edit().remove("jwt").apply()
     }
 
-    suspend fun rejectFriendRequest(fromUserId: String): Result<Unit> {
-        val currentUser = getCurrentUser() ?: return Result.failure(Exception("Not logged in"))
-        val updatedRequests = currentUser.friendRequests - fromUserId
-        usersRef.child(currentUser.id).child("friendRequests").setValue(updatedRequests).await()
-        return Result.success(Unit)
-    }
+    suspend fun getProfile() = api.getProfile(getToken())
+    suspend fun searchUserByNickname(nickname: String) = api.searchUserByNickname(nickname, getToken())
+    suspend fun sendFriendRequest(toNickname: String) = api.sendFriendRequest(toNickname, getToken())
+    suspend fun getFriendRequests() = api.getFriendRequests(getToken())
+    suspend fun acceptFriendRequest(requestId: Int) = api.acceptFriendRequest(requestId, getToken())
+    suspend fun declineFriendRequest(requestId: Int) = api.declineFriendRequest(requestId, getToken())
+    suspend fun getFriends() = api.getFriends(getToken())
 
-    suspend fun getFriends(): List<User> {
-        val currentUser = getCurrentUser() ?: return emptyList()
-        return currentUser.friends.mapNotNull { usersRef.child(it).get().await().getValue(User::class.java) }
-    }
-
-    suspend fun logout() {
-        auth.signOut()
-    }
+    private fun getToken(): String = "Bearer ${prefs.getString("jwt", null) ?: ""}"
 } 

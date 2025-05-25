@@ -1,21 +1,21 @@
 package com.example.widgetshare.ui.screens.auth
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.widgetshare.data.repository.UserRepository
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(navController: NavController) {
+    val context = LocalContext.current
+    val userRepository = remember { UserRepository(context) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
@@ -23,7 +23,6 @@ fun AuthScreen(navController: NavController) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val userRepository = remember { UserRepository() }
 
     Column(
         modifier = Modifier
@@ -40,8 +39,6 @@ fun AuthScreen(navController: NavController) {
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(48.dp))
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = if (isLogin) "Sign In" else "Sign Up",
                     style = MaterialTheme.typography.headlineSmall
@@ -86,53 +83,32 @@ fun AuthScreen(navController: NavController) {
                     onClick = {
                         isLoading = true
                         errorMessage = null
-                        if (isLogin) {
-                            FirebaseAuth.getInstance().signInWithEmailAndPassword(email, password)
-                                .addOnSuccessListener {
+                        scope.launch {
+                            if (isLogin) {
+                                val result = userRepository.login(email, password)
+                                if (result.isSuccess) {
                                     navController.navigate("friends") {
                                         popUpTo("auth") { inclusive = true }
                                     }
+                                } else {
+                                    errorMessage = result.exceptionOrNull()?.localizedMessage
                                 }
-                                .addOnFailureListener {
-                                    errorMessage = it.localizedMessage
-                                    isLoading = false
-                                }
-                        } else {
-                            if (nickname.isBlank()) {
-                                errorMessage = "Nickname is required"
                                 isLoading = false
-                                return@Button
-                            }
-                            scope.launch {
-                                try {
-                                    val exists = userRepository.findUserByNickname(nickname)
-                                    if (exists != null) {
-                                        errorMessage = "Nickname already taken"
-                                        isLoading = false
-                                        return@launch
-                                    }
-                                    FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, password)
-                                        .addOnSuccessListener { result ->
-                                            scope.launch {
-                                                try {
-                                                    userRepository.createUserProfile(result.user!!.uid, email, nickname)
-                                                    navController.navigate("friends") {
-                                                        popUpTo("auth") { inclusive = true }
-                                                    }
-                                                } catch (e: Exception) {
-                                                    errorMessage = e.localizedMessage
-                                                }
-                                                isLoading = false
-                                            }
-                                        }
-                                        .addOnFailureListener {
-                                            errorMessage = it.localizedMessage
-                                            isLoading = false
-                                        }
-                                } catch (e: Exception) {
-                                    errorMessage = e.localizedMessage
+                            } else {
+                                if (nickname.isBlank()) {
+                                    errorMessage = "Nickname is required"
                                     isLoading = false
+                                    return@launch
                                 }
+                                val result = userRepository.register(email, nickname, password)
+                                if (result.isSuccess) {
+                                    navController.navigate("friends") {
+                                        popUpTo("auth") { inclusive = true }
+                                    }
+                                } else {
+                                    errorMessage = result.exceptionOrNull()?.localizedMessage
+                                }
+                                isLoading = false
                             }
                         }
                     },

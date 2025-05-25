@@ -1,7 +1,5 @@
 package com.example.widgetshare.ui.screens.camera
 
-import android.app.Activity
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,8 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
-import com.example.widgetshare.data.models.User
-import com.example.widgetshare.data.remote.ApiClient
+import com.example.widgetshare.data.remote.UserDto
 import com.example.widgetshare.data.repository.PhotoRepository
 import com.example.widgetshare.data.repository.UserRepository
 import kotlinx.coroutines.launch
@@ -30,16 +27,16 @@ import okhttp3.RequestBody
 fun CameraScreen(navController: NavController) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val userRepository = remember { UserRepository(context) }
+    val photoRepository = remember { PhotoRepository(context) }
     var photoUri by remember { mutableStateOf<Uri?>(null) }
     var uploadUrl by remember { mutableStateOf<String?>(null) }
     var isUploading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var friends by remember { mutableStateOf<List<User>>(emptyList()) }
-    var selectedFriends by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var friends by remember { mutableStateOf<List<UserDto>>(emptyList()) }
+    var selectedFriends by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var isSending by remember { mutableStateOf(false) }
     var sendSuccess by remember { mutableStateOf(false) }
-    val userRepository = remember { UserRepository() }
-    val photoRepository = remember { PhotoRepository() }
 
     val pickImageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -86,8 +83,7 @@ fun CameraScreen(navController: NavController) {
                                 val fileBytes = inputStream?.readBytes() ?: throw Exception("Failed to read file")
                                 val requestFile = RequestBody.create("image/jpeg".toMediaTypeOrNull(), fileBytes)
                                 val body = MultipartBody.Part.createFormData("file", "photo.jpg", requestFile)
-                                val response = ApiClient.instance.uploadPhoto(body)
-                                uploadUrl = "http://193.227.241.219:8000" + response.url
+                                uploadUrl = photoRepository.uploadPhoto(body)
                             } catch (e: Exception) {
                                 errorMessage = e.localizedMessage
                             } finally {
