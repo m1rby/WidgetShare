@@ -57,13 +57,13 @@ interface ApiService {
 
     data class UploadPhotoResponse(val url: String)
 
+    @FormUrlEncoded
     @POST("/photos/send")
     suspend fun sendPhotoToFriends(
-        @Body req: SendPhotoRequest,
+        @Field("url") url: String,
+        @Field("friend_ids") friendIds: String, // JSON-массив строкой
         @Header("Authorization") token: String
     ): Unit
-
-    data class SendPhotoRequest(val url: String, val friend_ids: List<Int>)
 
     @GET("/photos/history")
     suspend fun getPhotoHistory(@Header("Authorization") token: String): List<PhotoDto>

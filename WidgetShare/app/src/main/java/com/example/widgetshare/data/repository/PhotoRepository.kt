@@ -8,6 +8,7 @@ import com.example.widgetshare.data.remote.ApiService
 import okhttp3.MultipartBody
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.google.gson.Gson
 
 class PhotoRepository(private val context: Context) {
     private val api: ApiService = ApiClient.getApiService(context)
@@ -18,7 +19,8 @@ class PhotoRepository(private val context: Context) {
     }
 
     suspend fun sendPhotoToFriends(url: String, friendIds: List<Int>) = withContext(Dispatchers.IO) {
-        api.sendPhotoToFriends(ApiService.SendPhotoRequest(url, friendIds), getToken())
+        val friendIdsJson = Gson().toJson(friendIds)
+        api.sendPhotoToFriends(url, friendIdsJson, getToken())
     }
 
     suspend fun getPhotoHistory() = api.getPhotoHistory(getToken())

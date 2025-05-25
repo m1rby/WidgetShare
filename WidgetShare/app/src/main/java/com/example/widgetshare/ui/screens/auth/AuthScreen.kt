@@ -102,8 +102,13 @@ fun AuthScreen(navController: NavController) {
                                 }
                                 val result = userRepository.register(email, nickname, password)
                                 if (result.isSuccess) {
-                                    navController.navigate("friends") {
-                                        popUpTo("auth") { inclusive = true }
+                                    val loginResult = userRepository.login(email, password)
+                                    if (loginResult.isSuccess) {
+                                        navController.navigate("friends") {
+                                            popUpTo("auth") { inclusive = true }
+                                        }
+                                    } else {
+                                        errorMessage = loginResult.exceptionOrNull()?.localizedMessage
                                     }
                                 } else {
                                     errorMessage = result.exceptionOrNull()?.localizedMessage
